@@ -331,6 +331,10 @@ async def accept_proposal(
         raise HTTPException(404, "Proposal not found")
     await require_room_member(prop.room_id, user, session)
 
+    # ЗАЩИТА: Автор не может подтвердить свое же предложение
+    if prop.proposed_by == user.id:
+        raise HTTPException(400, "Вы не можете подтвердить свое же предложение. Дождитесь партнера.")
+
     # Создаем/обновляем бюджет
     existing = (await session.execute(select(Budget).where(Budget.room_id == prop.room_id, Budget.month_start == prop.month_start))).scalar_one_or_none()
     if existing:
@@ -345,3 +349,19 @@ async def accept_proposal(
     await session.delete(prop)
     await session.commit()
     return {"status": "accepted"}
+
+@router.post("/proposal/reject/{proposal_id}")
+async def reject_proposal(
+        proposal_id: UUID,
+        user: User = Depends(get_current_user),
+        session: AsyncSession = Depends(get_session),
+):
+    prop = await session.get(BudgetProposal, proposal_id)
+    if not prop:
+        raise HTTPException(404, "Proposal not found")
+    await require_room_member(prop.room_id, user, session)
+
+    # Отклонить может любой участник (и автор, если передумал)
+    await session.delete(prop)
+    await session.commit()
+    return {"status": "rejected"}
