@@ -214,6 +214,27 @@ async def submit_input(
     await session.refresh(r)
     return await _round_payload(r, session, user)
 
+@router.post("/proposal/reject/{proposal_id}")
+async def reject_proposal(
+        proposal_id: UUID,
+        user: User = Depends(get_current_user),
+        session: AsyncSession = Depends(get_session),
+):
+    prop = await session.get(BudgetProposal, proposal_id)
+    if not prop:
+        raise HTTPException(404, "Proposal not found")
+    await require_room_member(prop.room_id, user, session)
+
+    # Проверка безопасности: отменить может только сам автор
+    if prop.proposed_by != user.id:
+        raise HTTPException(403, "Только автор может отменить свое предложение")
+
+    # Удаляем голоса, которые уже успели накидать, и само предложение
+    await session.execute(delete(BudgetProposalVote).where(BudgetProposalVote.proposal_id == prop.id))
+    await session.delete(prop)
+    await session.commit()
+
+    return {"status": "rejected"}
 
 @router.post("/rounds/{round_id}/vote", response_model=RoundOut)
 async def vote(
