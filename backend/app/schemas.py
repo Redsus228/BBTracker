@@ -77,6 +77,8 @@ class TransactionOut(BaseModel):
     created_at: datetime
     is_voided: bool
     voided_reason: str | None
+    user_nickname: str | None = None
+    category_name: str | None = None
 
 class ProposalOut(BaseModel):
     id: UUID

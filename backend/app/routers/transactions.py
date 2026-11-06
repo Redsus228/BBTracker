@@ -33,6 +33,7 @@ async def create_tx(
 
 
 @router.get("", response_model=list[TransactionOut])
+@router.get("", response_model=list[TransactionOut])
 async def list_tx(
         room_id: UUID,
         from_: datetime | None = Query(None, alias="from"),
@@ -44,11 +45,15 @@ async def list_tx(
         session: AsyncSession = Depends(get_session),
 ):
     await require_room_member(room_id, user, session)
+
     stmt = (
-        select(Transaction)
+        select(Transaction, User.nickname, Category.name)
+        .join(User, User.id == Transaction.user_id)
+        .join(Category, Category.id == Transaction.category_id, isouter=True)
         .where(Transaction.room_id == room_id)
         .order_by(Transaction.happened_at.desc())
     )
+
     if from_:
         stmt = stmt.where(Transaction.happened_at >= from_)
     if to:
@@ -59,8 +64,17 @@ async def list_tx(
         stmt = stmt.where(Transaction.category_id == category_id)
     if not include_voided:
         stmt = stmt.where(Transaction.is_voided == False)  # noqa: E712
-    txs = (await session.execute(stmt)).scalars().all()
-    return [TransactionOut.model_validate(t) for t in txs]
+
+    rows = (await session.execute(stmt)).all()
+
+    result = []
+    for tx, nickname, cat_name in rows:
+        tx_out = TransactionOut.model_validate(tx)
+        tx_out.user_nickname = nickname
+        tx_out.category_name = cat_name
+        result.append(tx_out)
+
+    return result
 
 
 @router.post("/{tx_id}/void", response_model=TransactionOut)
