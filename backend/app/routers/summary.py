@@ -5,7 +5,7 @@ from sqlalchemy import select, func, case, and_, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_session
 from app.deps import get_current_user, require_room_member
-from app.models import User, Transaction, Budget, RoomMember, BudgetProposal, BudgetProposalVote
+from app.models import User, Transaction, Budget, RoomMember, BudgetProposal, BudgetProposalVote, Room
 from app.schemas import RoomSummary, UserSummary, ProposalOut
 from app.utils.periods import month_bounds, week_bounds, as_dt_start, as_dt_end
 from app.routers.budgets import _check_proposal_expiration
@@ -107,7 +107,7 @@ async def room_summary(
         v_against = sum(1 for v in votes if not v.vote)
         p_created = p.created_at.replace(tzinfo=timezone.utc) if p.created_at.tzinfo is None else p.created_at
         expires_at = p_created + timedelta(hours=12)
-
+        room = await session.get(Room, room_id)
         pending_prop = ProposalOut(
             id=p.id,
             proposed_by_nickname=u.nickname,
@@ -129,4 +129,5 @@ async def room_summary(
         room_week_total_kop=sum(u.week_spent_kop for u in users_out),
         room_unplanned_total_kop=sum(u.unplanned_spent_kop for u in users_out),
         is_fallback=is_fallback,
+        invite_code=room.invite_code,  # <--- ПЕРЕДАЕМ КОД
     )

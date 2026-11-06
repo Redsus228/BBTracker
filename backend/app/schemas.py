@@ -116,3 +116,4 @@ class RoomSummary(BaseModel):
     room_week_total_kop: int
     room_unplanned_total_kop: int
     is_fallback: bool
+    invite_code: str
