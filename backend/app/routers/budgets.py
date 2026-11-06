@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from app.db import get_session
 from app.deps import get_current_user, require_room_member
 from app.models import User, Budget, BudgetRound, BudgetInput, BudgetVote, RoomMember, BudgetProposal
-
+from app.models import BudgetProposalVote
 router = APIRouter()
 
 
@@ -362,7 +362,7 @@ async def propose_budget(
     await session.commit()
     return {"status": "proposed"}
 
-from app.models import BudgetProposalVote
+
 
 class ProposalVoteIn(BaseModel):
     vote: bool

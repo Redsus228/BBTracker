@@ -32,7 +32,7 @@ async def create_tx(
     return TransactionOut.model_validate(tx)
 
 
-@router.get("", response_model=list[TransactionOut])
+
 @router.get("", response_model=list[TransactionOut])
 async def list_tx(
         room_id: UUID,
