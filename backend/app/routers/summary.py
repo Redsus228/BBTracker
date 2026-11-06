@@ -18,13 +18,22 @@ async def _effective_budget(room_id: UUID, month_start: date, session: AsyncSess
     )).scalar_one_or_none()
     if b:
         return b, False
+
     prev = (await session.execute(
         select(Budget)
         .where(Budget.room_id == room_id, Budget.month_start < month_start)
         .order_by(Budget.month_start.desc())
         .limit(1)
     )).scalar_one_or_none()
-    return prev, prev is not None
+
+    if prev:
+        return prev, True
+
+    # Если бюджета нет вообще, возвращаем "виртуальный" дефолтный
+    class DummyBudget:
+        weekly_limit_kop = 210000
+        unplanned_budget_kop = 500000
+    return DummyBudget(), True
 
 
 @router.get("/room/{room_id}", response_model=RoomSummary)
