@@ -1,4 +1,4 @@
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, func, delete
@@ -396,3 +396,31 @@ async def vote_proposal(
         await session.commit()
 
     return {"status": "voted"}
+
+async def _check_proposal_expiration(room_id: UUID, session: AsyncSession):
+    # Ищем предложение для этой комнаты
+    prop = (await session.execute(select(BudgetProposal).where(BudgetProposal.room_id == room_id))).scalar_one_or_none()
+    if not prop:
+        return
+
+    # Проверяем, прошло ли 12 часов
+    now = datetime.now(timezone.utc)
+    # В базе время хранится с таймзоной, но на всякий случай приводим к UTC
+    created_at = prop.created_at.replace(tzinfo=timezone.utc) if prop.created_at.tzinfo is None else prop.created_at
+
+    if now - created_at >= timedelta(hours=12):
+        # Время вышло! Автоматически применяем бюджет (как договорились)
+        existing_budget = (await session.execute(select(Budget).where(Budget.room_id == prop.room_id, Budget.month_start == prop.month_start))).scalar_one_or_none()
+        if existing_budget:
+            existing_budget.weekly_limit_kop = prop.weekly_limit_kop
+            existing_budget.unplanned_budget_kop = prop.unplanned_budget_kop
+        else:
+            session.add(Budget(
+                room_id=prop.room_id, month_start=prop.month_start,
+                weekly_limit_kop=prop.weekly_limit_kop, unplanned_budget_kop=prop.unplanned_budget_kop
+            ))
+
+        # Удаляем предложение и голоса
+        await session.execute(delete(BudgetProposalVote).where(BudgetProposalVote.proposal_id == prop.id))
+        await session.delete(prop)
+        await session.commit()

@@ -86,6 +86,7 @@ class ProposalOut(BaseModel):
     is_mine: bool = False
     votes_for: int = 0
     votes_against: int = 0
+    expires_at: datetime
 
 class VoidIn(BaseModel):
     reason: str = Field(min_length=1, max_length=256)

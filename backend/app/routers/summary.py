@@ -1,4 +1,4 @@
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
 from uuid import UUID
 from fastapi import APIRouter, Depends
 from sqlalchemy import select, func, case, and_, delete
@@ -8,6 +8,9 @@ from app.deps import get_current_user, require_room_member
 from app.models import User, Transaction, Budget, RoomMember, BudgetProposal, BudgetProposalVote
 from app.schemas import RoomSummary, UserSummary, ProposalOut
 from app.utils.periods import month_bounds, week_bounds, as_dt_start, as_dt_end
+from app.routers.budgets import _check_proposal_expiration
+
+
 
 router = APIRouter()
 
@@ -43,6 +46,7 @@ async def room_summary(
         session: AsyncSession = Depends(get_session),
 ):
     await require_room_member(room_id, user, session)
+    await _check_proposal_expiration(room_id, session)
     now = datetime.now(timezone.utc)
     today = now.date()
     month_start, month_end = month_bounds(today)
@@ -101,6 +105,8 @@ async def room_summary(
         votes = (await session.execute(select(BudgetProposalVote).where(BudgetProposalVote.proposal_id == p.id))).scalars().all()
         v_for = sum(1 for v in votes if v.vote)
         v_against = sum(1 for v in votes if not v.vote)
+        p_created = p.created_at.replace(tzinfo=timezone.utc) if p.created_at.tzinfo is None else p.created_at
+        expires_at = p_created + timedelta(hours=12)
 
         pending_prop = ProposalOut(
             id=p.id,
@@ -109,7 +115,9 @@ async def room_summary(
             unplanned_budget_kop=p.unplanned_budget_kop,
             is_mine=(p.proposed_by == user.id),
             votes_for=v_for,
-            votes_against=v_against
+            votes_against=v_against,
+            expires_at=expires_at
+
         )
     return RoomSummary(
         pending_proposal=pending_prop,
