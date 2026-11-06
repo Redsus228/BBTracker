@@ -97,7 +97,12 @@ async def room_summary(
     pending_prop = None
     if prop:
         p, u = prop
-        pending_prop = ProposalOut(id=p.id, proposed_by_nickname=u.nickname, weekly_limit_kop=p.weekly_limit_kop, unplanned_budget_kop=p.unplanned_budget_kop)
+        pending_prop = ProposalOut(
+            id=p.id,
+            proposed_by_nickname=u.nickname,
+            weekly_limit_kop=p.weekly_limit_kop,
+            unplanned_budget_kop=p.unplanned_budget_kop,
+            is_mine=(p.proposed_by == user.id))
     return RoomSummary(
         pending_proposal=pending_prop,
         room_id=room_id, month_start=month_start,

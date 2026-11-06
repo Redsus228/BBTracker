@@ -83,6 +83,7 @@ class ProposalOut(BaseModel):
     proposed_by_nickname: str
     weekly_limit_kop: int
     unplanned_budget_kop: int
+    is_mine: bool = False
 
 class VoidIn(BaseModel):
     reason: str = Field(min_length=1, max_length=256)
