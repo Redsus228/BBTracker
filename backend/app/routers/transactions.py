@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_session
 from app.deps import get_current_user, require_room_member
-from app.models import User, Transaction
+from app.models import User, Transaction, Category
 from app.schemas import TransactionCreateIn, TransactionOut, VoidIn
 
 router = APIRouter()
