@@ -1,12 +1,12 @@
 from datetime import datetime, timezone, date
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
 from app.db import get_session
 from app.deps import get_current_user, require_room_member
-from app.models import User, Budget, BudgetRound, BudgetInput, BudgetVote, RoomMember
+from app.models import User, Budget, BudgetRound, BudgetInput, BudgetVote, RoomMember, BudgetProposal
 
 router = APIRouter()
 
