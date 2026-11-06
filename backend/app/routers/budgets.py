@@ -327,7 +327,28 @@ async def propose_budget(
     await require_room_member(payload.room_id, user, session)
     ms = _parse_month(payload.month)
 
-    # Удаляем старое предложение, если есть
+    # Смотрим, сколько людей в комнате
+    members = await _member_ids(payload.room_id, session)
+
+    if len(members) == 1:
+        # Если пользователь один, сразу применяем бюджет
+        existing_budget = (await session.execute(
+            select(Budget).where(Budget.room_id == payload.room_id, Budget.month_start == ms)
+        )).scalar_one_or_none()
+
+        if existing_budget:
+            existing_budget.weekly_limit_kop = payload.weekly_limit_kop
+            existing_budget.unplanned_budget_kop = payload.unplanned_budget_kop
+        else:
+            session.add(Budget(
+                room_id=payload.room_id, month_start=ms,
+                weekly_limit_kop=payload.weekly_limit_kop,
+                unplanned_budget_kop=payload.unplanned_budget_kop
+            ))
+        await session.commit()
+        return {"status": "applied_immediately"}
+
+    # Если участников больше одного, создаем предложение для голосования
     await session.execute(delete(BudgetProposal).where(BudgetProposal.room_id == payload.room_id))
 
     proposal = BudgetProposal(
@@ -339,7 +360,7 @@ async def propose_budget(
     )
     session.add(proposal)
     await session.commit()
-    return {"status": "ok"}
+    return {"status": "proposed"}
 
 from app.models import BudgetProposalVote
 
