@@ -45,17 +45,6 @@ async def room_summary(
         select(User).join(RoomMember, RoomMember.user_id == User.id).where(RoomMember.room_id == room_id)
     )).scalars().all()
 
-    if not budget:
-        return RoomSummary(
-            room_id=room_id, month_start=month_start,
-            week_start=week_start, week_end=week_end,
-            weekly_limit_kop=0, unplanned_budget_kop=0,
-            users=[UserSummary(user_id=m.id, nickname=m.nickname,
-                               week_spent_kop=0, month_spent_kop=0, unplanned_spent_kop=0) for m in members],
-            room_week_total_kop=0, room_unplanned_total_kop=0,
-            is_fallback=False,
-        )
-
     m_lo, m_hi = as_dt_start(month_start), as_dt_end(month_end)
     w_lo, w_hi = as_dt_start(week_start), as_dt_end(week_end)
 
@@ -99,8 +88,8 @@ async def room_summary(
     return RoomSummary(
         room_id=room_id, month_start=month_start,
         week_start=week_start, week_end=week_end,
-        weekly_limit_kop=budget.weekly_limit_kop,
-        unplanned_budget_kop=budget.unplanned_budget_kop,
+        weekly_limit_kop=budget.weekly_limit_kop if budget else 0,
+        unplanned_budget_kop=budget.unplanned_budget_kop if budget else 0,
         users=users_out,
         room_week_total_kop=sum(u.week_spent_kop for u in users_out),
         room_unplanned_total_kop=sum(u.unplanned_spent_kop for u in users_out),

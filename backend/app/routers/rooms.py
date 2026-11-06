@@ -27,6 +27,19 @@ async def create_room(
     session.add(room)
     await session.flush()
     session.add(RoomMember(room_id=room.id, user_id=user.id))
+
+    # --- АВТО-БЮДЖЕТ ---
+    # Создаем дефолтный бюджет на текущий месяц (5000 руб неделя / 2000 руб форс-мажор)
+    current_month_start = datetime.now(timezone.utc).date().replace(day=1)
+    default_budget = Budget(
+        room_id=room.id,
+        month_start=current_month_start,
+        weekly_limit_kop=500000,    # 5000 рублей
+        unplanned_budget_kop=200000 # 2000 рублей
+    )
+    session.add(default_budget)
+    # -------------------
+
     await session.commit()
     await session.refresh(room)
     return RoomOut.model_validate(room)
