@@ -1,17 +1,14 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy import case, and_
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.models import Transaction
-from app.schemas import RoomSummary, UserSummary, ProposalOut
-from app.utils.periods import month_bounds, week_bounds, as_dt_start, as_dt_end
 from datetime import datetime, timezone, date
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, func, delete  # <-- ДОБАВИЛИ delete
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends
+from sqlalchemy import select, func, case, and_, delete
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_session
 from app.deps import get_current_user, require_room_member
-from app.models import User, Budget, RoomMember, BudgetProposal
+from app.models import User, Transaction, Budget, RoomMember, BudgetProposal
+from app.schemas import RoomSummary, UserSummary, ProposalOut
+from app.utils.periods import month_bounds, week_bounds, as_dt_start, as_dt_end
+
 router = APIRouter()
 
 
