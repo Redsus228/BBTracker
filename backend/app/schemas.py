@@ -78,6 +78,11 @@ class TransactionOut(BaseModel):
     is_voided: bool
     voided_reason: str | None
 
+class ProposalOut(BaseModel):
+    id: UUID
+    proposed_by_nickname: str
+    weekly_limit_kop: int
+    unplanned_budget_kop: int
 
 class VoidIn(BaseModel):
     reason: str = Field(min_length=1, max_length=256)
@@ -94,6 +99,7 @@ class UserSummary(BaseModel):
 
 
 class RoomSummary(BaseModel):
+    pending_proposal: ProposalOut | None = None
     room_id: UUID
     month_start: date
     week_start: date

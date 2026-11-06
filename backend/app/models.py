@@ -112,3 +112,13 @@ class BudgetVote(Base):
     vote: Mapped[bool] = mapped_column(Boolean, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     __table_args__ = (UniqueConstraint("round_id", "user_id", name="uq_vote_round_user"),)
+
+class BudgetProposal(Base):
+    __tablename__ = "budget_proposals"
+    id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    room_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("rooms.id", ondelete="CASCADE"), nullable=False, index=True)
+    month_start: Mapped[date] = mapped_column(Date, nullable=False)
+    proposed_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    weekly_limit_kop: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    unplanned_budget_kop: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

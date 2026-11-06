@@ -114,6 +114,13 @@ async def create_or_get_round(
         session: AsyncSession = Depends(get_session),
 ):
     await require_room_member(payload.room_id, user, session)
+
+    # --- ПРОВЕРКА НА 2 ЧЕЛОВЕК ---
+    members = await _member_ids(payload.room_id, session)
+    if len(members) < 2:
+        raise HTTPException(400, "Для голосования нужно хотя бы 2 участника в комнате")
+    # -----------------------------
+
     ms = _parse_month(payload.month)
 
     existing = (await session.execute(
@@ -283,3 +290,58 @@ async def current_budget(
             accepted_at=prev.accepted_at, is_fallback=True,
         )
     raise HTTPException(404, "no budget yet")
+
+class ProposalIn(BaseModel):
+    room_id: UUID
+    month: str
+    weekly_limit_kop: int
+    unplanned_budget_kop: int
+
+@router.post("/propose")
+async def propose_budget(
+        payload: ProposalIn,
+        user: User = Depends(get_current_user),
+        session: AsyncSession = Depends(get_session),
+):
+    await require_room_member(payload.room_id, user, session)
+    ms = _parse_month(payload.month)
+
+    # Удаляем старое предложение, если есть
+    await session.execute(delete(BudgetProposal).where(BudgetProposal.room_id == payload.room_id))
+
+    proposal = BudgetProposal(
+        room_id=payload.room_id,
+        month_start=ms,
+        proposed_by=user.id,
+        weekly_limit_kop=payload.weekly_limit_kop,
+        unplanned_budget_kop=payload.unplanned_budget_kop
+    )
+    session.add(proposal)
+    await session.commit()
+    return {"status": "ok"}
+
+@router.post("/proposal/accept/{proposal_id}")
+async def accept_proposal(
+        proposal_id: UUID,
+        user: User = Depends(get_current_user),
+        session: AsyncSession = Depends(get_session),
+):
+    prop = await session.get(BudgetProposal, proposal_id)
+    if not prop:
+        raise HTTPException(404, "Proposal not found")
+    await require_room_member(prop.room_id, user, session)
+
+    # Создаем/обновляем бюджет
+    existing = (await session.execute(select(Budget).where(Budget.room_id == prop.room_id, Budget.month_start == prop.month_start))).scalar_one_or_none()
+    if existing:
+        existing.weekly_limit_kop = prop.weekly_limit_kop
+        existing.unplanned_budget_kop = prop.unplanned_budget_kop
+    else:
+        session.add(Budget(
+            room_id=prop.room_id, month_start=prop.month_start,
+            weekly_limit_kop=prop.weekly_limit_kop, unplanned_budget_kop=prop.unplanned_budget_kop
+        ))
+
+    await session.delete(prop)
+    await session.commit()
+    return {"status": "accepted"}

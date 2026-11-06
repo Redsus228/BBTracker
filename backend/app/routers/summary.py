@@ -5,8 +5,8 @@ from sqlalchemy import select, func, case, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_session
 from app.deps import get_current_user, require_room_member
-from app.models import User, Transaction, Budget, RoomMember
-from app.schemas import RoomSummary, UserSummary
+from app.models import User, Transaction, Budget, RoomMember, BudgetProposal
+from app.schemas import RoomSummary, UserSummary, ProposalOut
 from app.utils.periods import month_bounds, week_bounds, as_dt_start, as_dt_end
 
 router = APIRouter()
@@ -93,8 +93,13 @@ async def room_summary(
             month_spent_kop=int(a.month_spent) if a else 0,
             unplanned_spent_kop=int(a.unplanned_spent) if a else 0,
         ))
-
+    prop = (await session.execute(select(BudgetProposal, User).join(User, User.id == BudgetProposal.proposed_by).where(BudgetProposal.room_id == room_id))).first()
+    pending_prop = None
+    if prop:
+        p, u = prop
+        pending_prop = ProposalOut(id=p.id, proposed_by_nickname=u.nickname, weekly_limit_kop=p.weekly_limit_kop, unplanned_budget_kop=p.unplanned_budget_kop)
     return RoomSummary(
+        pending_proposal=pending_prop,
         room_id=room_id, month_start=month_start,
         week_start=week_start, week_end=week_end,
         weekly_limit_kop=budget.weekly_limit_kop if budget else 0,
