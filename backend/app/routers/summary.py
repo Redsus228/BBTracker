@@ -5,7 +5,7 @@ from sqlalchemy import select, func, case, and_, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_session
 from app.deps import get_current_user, require_room_member
-from app.models import User, Transaction, Budget, RoomMember, BudgetProposal
+from app.models import User, Transaction, Budget, RoomMember, BudgetProposal, BudgetProposalVote
 from app.schemas import RoomSummary, UserSummary, ProposalOut
 from app.utils.periods import month_bounds, week_bounds, as_dt_start, as_dt_end
 
@@ -97,12 +97,20 @@ async def room_summary(
     pending_prop = None
     if prop:
         p, u = prop
+        # Считаем голоса
+        votes = (await session.execute(select(BudgetProposalVote).where(BudgetProposalVote.proposal_id == p.id))).scalars().all()
+        v_for = sum(1 for v in votes if v.vote)
+        v_against = sum(1 for v in votes if not v.vote)
+
         pending_prop = ProposalOut(
             id=p.id,
             proposed_by_nickname=u.nickname,
             weekly_limit_kop=p.weekly_limit_kop,
             unplanned_budget_kop=p.unplanned_budget_kop,
-            is_mine=(p.proposed_by == user.id))
+            is_mine=(p.proposed_by == user.id),
+            votes_for=v_for,
+            votes_against=v_against
+        )
     return RoomSummary(
         pending_proposal=pending_prop,
         room_id=room_id, month_start=month_start,

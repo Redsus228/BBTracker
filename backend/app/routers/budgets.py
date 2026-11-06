@@ -320,9 +320,15 @@ async def propose_budget(
     await session.commit()
     return {"status": "ok"}
 
-@router.post("/proposal/accept/{proposal_id}")
-async def accept_proposal(
+from app.models import BudgetProposalVote
+
+class ProposalVoteIn(BaseModel):
+    vote: bool
+
+@router.post("/proposal/{proposal_id}/vote")
+async def vote_proposal(
         proposal_id: UUID,
+        payload: ProposalVoteIn,
         user: User = Depends(get_current_user),
         session: AsyncSession = Depends(get_session),
 ):
@@ -331,37 +337,41 @@ async def accept_proposal(
         raise HTTPException(404, "Proposal not found")
     await require_room_member(prop.room_id, user, session)
 
-    # ЗАЩИТА: Автор не может подтвердить свое же предложение
     if prop.proposed_by == user.id:
-        raise HTTPException(400, "Вы не можете подтвердить свое же предложение. Дождитесь партнера.")
+        raise HTTPException(400, "Автор не может голосовать за свое предложение")
 
-    # Создаем/обновляем бюджет
-    existing = (await session.execute(select(Budget).where(Budget.room_id == prop.room_id, Budget.month_start == prop.month_start))).scalar_one_or_none()
+    # Записываем голос (или обновляем, если уже голосовал)
+    existing = (await session.execute(select(BudgetProposalVote).where(BudgetProposalVote.proposal_id == prop.id, BudgetProposalVote.user_id == user.id))).scalar_one_or_none()
     if existing:
-        existing.weekly_limit_kop = prop.weekly_limit_kop
-        existing.unplanned_budget_kop = prop.unplanned_budget_kop
+        existing.vote = payload.vote
     else:
-        session.add(Budget(
-            room_id=prop.room_id, month_start=prop.month_start,
-            weekly_limit_kop=prop.weekly_limit_kop, unplanned_budget_kop=prop.unplanned_budget_kop
-        ))
-
-    await session.delete(prop)
+        session.add(BudgetProposalVote(proposal_id=prop.id, user_id=user.id, vote=payload.vote))
     await session.commit()
-    return {"status": "accepted"}
 
-@router.post("/proposal/reject/{proposal_id}")
-async def reject_proposal(
-        proposal_id: UUID,
-        user: User = Depends(get_current_user),
-        session: AsyncSession = Depends(get_session),
-):
-    prop = await session.get(BudgetProposal, proposal_id)
-    if not prop:
-        raise HTTPException(404, "Proposal not found")
-    await require_room_member(prop.room_id, user, session)
+    # Считаем результаты
+    members = await _member_ids(prop.room_id, session)
+    voters_count = len(members) - 1 # Все, кроме автора
 
-    # Отклонить может любой участник (и автор, если передумал)
-    await session.delete(prop)
-    await session.commit()
-    return {"status": "rejected"}
+    votes = (await session.execute(select(BudgetProposalVote).where(BudgetProposalVote.proposal_id == prop.id))).scalars().all()
+    votes_for = sum(1 for v in votes if v.vote)
+    votes_against = sum(1 for v in votes if not v.vote)
+
+    # Если проголосовало достаточно людей, принимаем решение
+    if len(votes) >= voters_count:
+        if votes_for > votes_against:
+            # Большинство ЗА — применяем бюджет
+            existing_budget = (await session.execute(select(Budget).where(Budget.room_id == prop.room_id, Budget.month_start == prop.month_start))).scalar_one_or_none()
+            if existing_budget:
+                existing_budget.weekly_limit_kop = prop.weekly_limit_kop
+                existing_budget.unplanned_budget_kop = prop.unplanned_budget_kop
+            else:
+                session.add(Budget(
+                    room_id=prop.room_id, month_start=prop.month_start,
+                    weekly_limit_kop=prop.weekly_limit_kop, unplanned_budget_kop=prop.unplanned_budget_kop
+                ))
+        # Если голосов Против больше (или поровну), просто удаляем предложение
+        await session.execute(delete(BudgetProposalVote).where(BudgetProposalVote.proposal_id == prop.id))
+        await session.delete(prop)
+        await session.commit()
+
+    return {"status": "voted"}
