@@ -82,6 +82,8 @@ class TransactionOut(BaseModel):
 class VoidIn(BaseModel):
     reason: str = Field(min_length=1, max_length=256)
 
+class UpdateProfileIn(BaseModel):
+    nickname: str = Field(min_length=2, max_length=32)
 
 class UserSummary(BaseModel):
     user_id: UUID
