@@ -10,6 +10,7 @@ class RegisterIn(BaseModel):
 
 class LoginIn(BaseModel):
     device_uuid: str = Field(min_length=8, max_length=128)
+    nickname: str | None = None
 
 
 class UserOut(BaseModel):

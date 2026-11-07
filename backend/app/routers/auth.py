@@ -36,13 +36,30 @@ async def register(payload: RegisterIn, session: AsyncSession = Depends(get_sess
 
 @router.post("/login", response_model=AuthOut)
 async def login(payload: LoginIn, session: AsyncSession = Depends(get_session)):
+    # 1. Сначала ищем по ID устройства (как раньше)
     dev = (await session.execute(
         select(Device).where(Device.device_uuid == payload.device_uuid)
     )).scalar_one_or_none()
-    if not dev:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "device not registered")
-    user = await session.get(User, dev.user_id)
-    return AuthOut(token=create_token(str(user.id)), user=UserOut.model_validate(user))
+
+    if dev:
+        user = await session.get(User, dev.user_id)
+        return AuthOut(token=create_token(str(user.id)), user=UserOut.model_validate(user))
+
+    # 2. Если устройства нет, но есть никнейм (пользователь переустановил приложение)
+    if payload.nickname:
+        user = (await session.execute(
+            select(User).where(User.nickname == payload.nickname)
+        )).scalar_one_or_none()
+
+        if user:
+            # Привязываем новое устройство к существующему пользователю
+            new_dev = Device(user_id=user.id, device_uuid=payload.device_uuid)
+            session.add(new_dev)
+            await session.commit()
+            return AuthOut(token=create_token(str(user.id)), user=UserOut.model_validate(user))
+
+    # 3. Если ничего не нашли
+    raise HTTPException(status.HTTP_404_NOT_FOUND, "device not registered")
 
 
 # --- НОВЫЕ РУЧКИ ДЛЯ ПРОФИЛЯ ---
